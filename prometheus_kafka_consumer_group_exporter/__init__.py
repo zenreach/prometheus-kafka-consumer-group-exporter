@@ -2,6 +2,7 @@ import argparse
 import logging
 import signal
 import sys
+import os
 
 from kafka import KafkaConsumer
 from logstash_formatter import LogstashFormatterV1
@@ -9,6 +10,10 @@ from prometheus_client import start_http_server, Gauge, Counter
 from struct import unpack_from
 
 METRIC_PREFIX = 'kafka_consumer_group_'
+
+sasl_enabled = os.environ.get('SASL_ENABLED', 'false')
+sasl_username = os.environ.get('SASL_USERNAME', '')
+sasl_password = os.environ.get('SASL_PASSWORD', '')
 
 gauges = {}
 counters = {}
@@ -94,12 +99,25 @@ def main():
     port = args.port
     bootstrap_brokers = args.bootstrap_brokers.split(',')
 
-    consumer = KafkaConsumer(
-        '__consumer_offsets',
-        bootstrap_servers=bootstrap_brokers,
-        auto_offset_reset='earliest' if args.from_start else 'latest',
-        group_id=None
-    )
+    if sasl_enabled == "true":
+        consumer = KafkaConsumer(
+            '__consumer_offsets',
+            bootstrap_servers=bootstrap_brokers,
+            auto_offset_reset='earliest' if args.from_start else 'latest',
+            group_id=None,
+            security_protocol='SASL_PLAINTEXT',
+            sasl_mechanism='PLAIN',
+            sasl_plain_username=sasl_username,
+            sasl_plain_password=sasl_password
+        )
+    else:
+        consumer = KafkaConsumer(
+            '__consumer_offsets',
+            bootstrap_servers=bootstrap_brokers,
+            auto_offset_reset='earliest' if args.from_start else 'latest',
+            group_id=None
+        )
+
 
     logging.info('Starting server...')
     start_http_server(port)
